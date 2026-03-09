@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Car Parking Finder</title>
+<style>
+body{
+  font-family: Arial;
+  text-align: center;
+}
+
+.row{
+  margin: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.row-label{
+  margin-bottom: 5px;
+}
+
+.sides{
+  display: flex;
+  flex-wrap: wrap; /* allow continuous rows to wrap nicely */
+  justify-content: center;
+}
+
+.side{
+  display: flex;
+  margin: 0 10px;
+}
+
+.space{
+  width: 25px;
+  height: 25px;
+  background: #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px;
+  cursor: pointer;
+  font-size: 10px;
+  border-radius: 4px;
+}
+
+.parked{
+  background: red;
+  color: white;
+}
+
+.footpath{
+  width: 100%;
+  height: 20px;
+  background: #aaa;
+  margin: 10px 0;
+  border-radius: 4px;
+}
+
+.road{
+  width: 100%;
+  height: 20px;
+  background: #555;
+  margin: 10px 0;
+  border-radius: 4px;
+}
+</style>
+</head>
+<body>
+
+<h2>Parking Grid</h2>
+<p>Tap where you parked</p>
+
+<div id="parking"></div>
+
+<h3 id="result"></h3>
+<button onclick="clearParking()">Clear Parking</button>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+<script>
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyC32gb73OQymHX0MOPDxl97upwbBEZT2GU",
+  authDomain: "family-parking-7974d.firebaseapp.com",
+  projectId: "family-parking-7974d",
+  storageBucket: "family-parking-7974d.firebasestorage.app",
+  messagingSenderId: "20467564528",
+  appId: "1:20467564528:web:efe716b6a2e6998311a735"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Rows and slots
+let rows = ["Outside","Front","A","B","C","D","Back"];
+let rowSpaces = {
+  "Outside": 7,   // Outside parking continuous
+  "Front": 24,    // Front split left/right
+  "A": 30,
+  "B": 30,
+  "C": 30,
+  "D": 30,
+  "Back": 24      // Back split left/right
+};
+
+let parkingDiv = document.getElementById("parking");
+
+// Create parking grid
+rows.forEach((row,rowIndex)=>{
+  let rowDiv = document.createElement("div");
+  rowDiv.className = "row";
+
+  let label = document.createElement("div");
+  label.className = "row-label";
+  label.innerHTML = "<b>Row "+row+"</b>";
+  rowDiv.appendChild(label);
+
+  let totalSlots = rowSpaces[row];
+
+  // Decide which rows to split
+  let splitRow = (row === "Front" || row === "Back");
+
+  if(splitRow){
+    let sidesDiv = document.createElement("div");
+    sidesDiv.className = "sides";
+
+    let leftDiv = document.createElement("div");
+    leftDiv.className = "side left";
+
+    let rightDiv = document.createElement("div");
+    rightDiv.className = "side right";
+
+    let half = Math.ceil(totalSlots/2);
+
+    for(let i=1;i<=totalSlots;i++){
+      let space = document.createElement("div");
+      space.className = "space";
+      space.innerText = i;
+
+      space.onclick = ()=>{
+        db.collection("parking").doc("car").set({
+          row: row,
+          spot: i
+        });
+      }
+
+      if(i <= half) leftDiv.appendChild(space);
+      else rightDiv.appendChild(space);
+    }
+
+    sidesDiv.appendChild(leftDiv);
+    sidesDiv.appendChild(rightDiv);
+    rowDiv.appendChild(sidesDiv);
+
+  } else {
+    // Continuous row for Outside and A-D
+    let rowContainer = document.createElement("div");
+    rowContainer.className = "sides";
+
+    for(let i=1;i<=totalSlots;i++){
+      let space = document.createElement("div");
+      space.className = "space";
+      space.innerText = i;
+
+      space.onclick = ()=>{
+        db.collection("parking").doc("car").set({
+          row: row,
+          spot: i
+        });
+      }
+
+      rowContainer.appendChild(space);
+    }
+
+    rowDiv.appendChild(rowContainer);
+  }
+
+  parkingDiv.appendChild(rowDiv);
+
+  // Road between Outside and Front
+  if(row === "Outside"){
+    let roadDiv = document.createElement("div");
+    roadDiv.className = "road";
+    parkingDiv.appendChild(roadDiv);
+  }
+
+  // Footpaths after Front and D
+  if(row === "Front" || row === "D"){
+    let footpathDiv = document.createElement("div");
+    footpathDiv.className = "footpath";
+    parkingDiv.appendChild(footpathDiv);
+  }
+});
+
+// Listen for live updates
+db.collection("parking").doc("car").onSnapshot((doc)=>{
+  if(doc.exists){
+    let data = doc.data();
+    let savedRow = data.row;
+    let savedSpot = data.spot;
+
+    let allSpaces = document.querySelectorAll(".space");
+    allSpaces.forEach(space=>space.classList.remove("parked"));
+
+    let index = 0;
+    for(let i=0;i<rows.indexOf(savedRow);i++){
+      index += rowSpaces[rows[i]];
+    }
+    index += (savedSpot-1);
+
+    if(allSpaces[index]) allSpaces[index].classList.add("parked");
+
+    document.getElementById("result").innerText =
+      "🚗 Parked at Row "+savedRow+" Space "+savedSpot;
+  }
+});
+
+// Clear parking
+function clearParking(){
+  db.collection("parking").doc("car").delete();
+  document.getElementById("result").innerText="Parking cleared";
+}
+</script>
+
+</body>
+</html>
